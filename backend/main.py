@@ -11,13 +11,7 @@ model = genai.GenerativeModel("gemini-1.5-flash-latest")
 
 pc = Pinecone(api_key="pcsk_5JQvGu_Sexw9S6kQvcq5QuPXkETxKp7dTgWfhaKUgxKoNfyJHU1xWAgoTpvSNQLzhQg1Qo")
 index_name = "genai-intel-chat"
-# if index_name not in pc.list_indexes():
-#     pc.create_index(
-#         name=index_name,
-#         dimension=768,
-#         metric="cosine",
-#         spec=ServerlessSpec(cloud="aws", region="us-east-1")
-#     )
+
 index = pc.Index(index_name)
 
 SERPER_API_KEY = "0da379d2affd1fc587d4a472d84265c5f438a83f"

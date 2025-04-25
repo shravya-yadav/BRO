@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ChatBox from '../components/ChatBox';
 import SideBar from '../components/SideBar';
-import HistoryPanel from '../components/HistoryPanel';
 import './App.css';
 import axios from 'axios';
 
@@ -13,9 +12,11 @@ console.log("Using backend URL:", BASE_URL);
 function App() {
   const [selectedHistory, setSelectedHistory] = useState(null);
   const [history, setHistory] = useState([]);
+  const [showSidebar, setShowSidebar] = useState(true);
 
   const handleHistoryClick = (query) => {
     setSelectedHistory(query);
+    setShowSidebar(false); // Hide sidebar after first selection
   };
 
   const updateHistory = (prompt) => {
@@ -38,9 +39,10 @@ function App() {
   return (
     <div className="app-wrapper">
       <div className="app-box">
-        <SideBar onHistoryClick={handleHistoryClick} history={history} />
+        {showSidebar && (
+          <SideBar onHistoryClick={handleHistoryClick} history={history} />
+        )}
         <ChatBox selectedHistory={selectedHistory} onSendQuery={updateHistory} />
-        {/* <HistoryPanel history={history} onSelect={handleHistoryClick} /> */}
       </div>
     </div>
   );

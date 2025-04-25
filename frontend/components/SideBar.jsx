@@ -19,7 +19,7 @@ function SideBar({ onHistoryClick }) {
         {historyItems.map((item, index) => (
           <li
             key={index}
-            style={{ marginBottom: '1rem', cursor: 'pointer', color: '#007BFF' }}
+            style={{ marginBottom: '1rem', cursor: 'pointer', color: '#FFFFFF' }}
             onClick={() => onHistoryClick(item)}
           >
             🔹 {item}

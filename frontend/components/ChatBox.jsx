@@ -13,6 +13,7 @@ function ChatBox({ selectedHistory }) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
   const messagesEndRef = useRef(null);
 
   const userId = 'user123';
@@ -88,13 +89,24 @@ function ChatBox({ selectedHistory }) {
     if (e.key === 'Enter') sendMessage();
   };
 
+  const toggleHistory = () => {
+    setShowHistory(!showHistory);
+  };
+
   return (
     <div className="chat-wrapper">
       <div className="chat-container">
         <div className="chat-section">
           <div className="chat-header">
             <h3>🤖 Chat with <span className="bro-text">BRO</span></h3>
-            <button onClick={resetChat}>Clear Chat</button>
+            <div className="chat-actions">
+              <button onClick={resetChat}>Clear Chat</button>
+              {messages.length > 0 && (
+                <button onClick={toggleHistory} className="history-toggle">
+                  {showHistory ? 'Hide History' : 'Show History'}
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="chat-messages">
@@ -122,8 +134,8 @@ function ChatBox({ selectedHistory }) {
           </div>
         </div>
 
-        {/* History panel component */}
-        <HistoryPanel history={history} onSelect={sendMessage} />
+        {/* History panel component - now togglable */}
+        {showHistory && <HistoryPanel history={history} onSelect={sendMessage} />}
       </div>
     </div>
   );
