@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from pinecone import Pinecone, ServerlessSpec
 from fastapi.middleware.cors import CORSMiddleware
 
-genai.configure(api_key="AIzaSyA62GAHTjnfqI602xCxTzNEnW4k6uQ-LOw")
+genai.configure(api_key="AIzaSyCUbzMWfgV6z_84P-1LOV8-sTgYgtnvHGo")
 model = genai.GenerativeModel("gemini-1.5-flash-latest")
 
 pc = Pinecone(api_key="pcsk_5JQvGu_Sexw9S6kQvcq5QuPXkETxKp7dTgWfhaKUgxKoNfyJHU1xWAgoTpvSNQLzhQg1Qo")
