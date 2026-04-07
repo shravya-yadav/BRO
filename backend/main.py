@@ -158,5 +158,5 @@ async def chat(req: ChatRequest):
 def home():
     return {"message": "AI Intel Agent Running 🚀"}
 
-port = int(os.environ.get("PORT", 10000))
+port = int(os.environ.get("PORT", 0000))
 uvicorn.run(app, host="0.0.0.0", port=port)
