@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from pinecone import Pinecone
 from fastapi.middleware.cors import CORSMiddleware
 from sentence_transformers import SentenceTransformer
-
+import uvicorn 
 # ✅ Configure Groq
 groq_client = Groq(api_key="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")
 GROQ_MODEL = "llama-3.3-70b-versatile"
@@ -158,8 +158,5 @@ async def chat(req: ChatRequest):
 def home():
     return {"message": "AI Intel Agent Running 🚀"}
 
-# ---------- Main ----------
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.environ.get("PORT", 10000))  # 🔑 dynamic port from Render
-    uvicorn.run(app, host="0.0.0.0", port=port)
+port = int(os.environ.get("PORT", 10000))
+uvicorn.run(app, host="0.0.0.0", port=port)
