@@ -6,23 +6,34 @@ from pydantic import BaseModel
 from pinecone import Pinecone
 from fastapi.middleware.cors import CORSMiddleware
 from sentence_transformers import SentenceTransformer
-import uvicorn 
-# ✅ Configure Groq
+
+# ✅ Configure Groq (kept as you asked)
 groq_client = Groq(api_key="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")
 GROQ_MODEL = "llama-3.3-70b-versatile"
 
-# ✅ SentenceTransformer for embeddings (replaces Gemini embeddings)
+# ✅ Embedding model
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
-# ✅ Pinecone
+# ✅ Pinecone (kept key)
 pc = Pinecone(api_key="pcsk_6mEt73_2ZH5JtrLugHGaBnASc3aLXFARLNayqijEJHHVhvVJenATzd2d1Wn7oGj5ShCmzn")
+
 index_name = "genai-intel-chat"
+
+# ✅ Ensure index exists (VERY IMPORTANT)
+if index_name not in pc.list_indexes().names():
+    pc.create_index(
+        name=index_name,
+        dimension=384,  # all-MiniLM-L6-v2 → 384
+        metric="cosine"
+    )
+
 index = pc.Index(index_name)
 
 SERPER_API_KEY = "0da379d2affd1fc587d4a472d84265c5f438a83f"
 
 app = FastAPI()
 
+# ⚠️ In-memory (will reset on restart)
 user_histories = {}
 
 # ---------- Schema ----------
@@ -45,6 +56,7 @@ async def save_history(entry: HistoryEntry):
 async def get_history(user_id: str):
     return user_histories.get(user_id, [])
 
+# ---------- CORS ----------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -60,8 +72,7 @@ class ChatRequest(BaseModel):
 # ---------- Embedding ----------
 def get_embedding(text):
     try:
-        vector = embedding_model.encode(text).tolist()
-        return vector
+        return embedding_model.encode(text).tolist()
     except Exception as e:
         print(f"[ERROR] Embedding failed: {e}")
         return None
@@ -103,7 +114,11 @@ def retrieve_memory(user_id, query, top_k=3):
 def fetch_news(company):
     headers = {"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"}
     try:
-        res = requests.post("https://google.serper.dev/news", headers=headers, json={"q": company})
+        res = requests.post(
+            "https://google.serper.dev/news",
+            headers=headers,
+            json={"q": company}
+        )
         return res.json().get("news", [])
     except Exception as e:
         print(f"[ERROR] News fetch failed: {e}")
@@ -112,7 +127,11 @@ def fetch_news(company):
 def summarize_news(news_items):
     if not news_items:
         return "No news found."
-    headlines = "\n".join([f"{n['title']}: {n['link']}" for n in news_items[:5]])
+
+    headlines = "\n".join([
+        f"{n['title']}: {n['link']}" for n in news_items[:5]
+    ])
+
     try:
         response = groq_client.chat.completions.create(
             model=GROQ_MODEL,
@@ -131,32 +150,41 @@ async def chat(req: ChatRequest):
     msg = req.message
 
     try:
+        # 🧠 News trigger
         if "news" in msg.lower():
             news = fetch_news(msg)
             summary = summarize_news(news)
             store_memory(uid, "news", summary, "source")
             return {"response": summary}
 
+        # 🧠 Memory retrieval
         memory = retrieve_memory(uid, msg)
-        prompt = f"Context:\n{chr(10).join(memory)}\n\nUser Query:\n{msg}"
+
+        prompt = f"""
+Context:
+{chr(10).join(memory)}
+
+User Query:
+{msg}
+"""
 
         response = groq_client.chat.completions.create(
             model=GROQ_MODEL,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=1024
         )
+
         reply = response.choices[0].message.content
+
         store_memory(uid, "chat", reply, "faq")
 
         return {"response": reply}
 
     except Exception as e:
         print(f"[ERROR] Chat failed: {e}")
-        return {"response": "Something went wrong"}
+        return {"response": str(e)}  # better debugging
 
+# ---------- Root ----------
 @app.get("/")
 def home():
     return {"message": "AI Intel Agent Running 🚀"}
-
-port = int(os.environ.get("PORT", 0000))
-uvicorn.run(app, host="0.0.0.0", port=port)
