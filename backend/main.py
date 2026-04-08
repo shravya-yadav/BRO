@@ -6,12 +6,26 @@ from pydantic import BaseModel
 from pinecone import Pinecone
 from fastapi.middleware.cors import CORSMiddleware
 from sentence_transformers import SentenceTransformer
+from dotenv import load_dotenv
 
-# ✅ Hardcoded API Keys
-GROQ_API_KEY = "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"
-PINECONE_API_KEY = "pcsk_6mEt73_2ZH5JtrLugHGaBnASc3aLXFARLNayqijEJHHVhvVJenATzd2d1Wn7oGj5ShCmzn"
-SERPER_API_KEY = "0da379d2affd1fc587d4a472d84265c5f438a83f"
+# ✅ Load .env locally (no-op on Render — env vars are set via Render dashboard)
+load_dotenv()
+
+# ✅ API Keys — read from environment
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+SERPER_API_KEY = os.getenv("SERPER_API_KEY")
 GROQ_MODEL = "llama-3.3-70b-versatile"
+
+# ✅ Fail fast at startup if any key is missing
+missing = [k for k, v in {
+    "GROQ_API_KEY": GROQ_API_KEY,
+    "PINECONE_API_KEY": PINECONE_API_KEY,
+    "SERPER_API_KEY": SERPER_API_KEY,
+}.items() if not v]
+
+if missing:
+    raise RuntimeError(f"Missing required environment variables: {', '.join(missing)}")
 
 # ✅ Configure Groq
 groq_client = Groq(api_key=GROQ_API_KEY)
