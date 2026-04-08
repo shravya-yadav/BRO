@@ -7,54 +7,28 @@ from pinecone import Pinecone
 from fastapi.middleware.cors import CORSMiddleware
 from sentence_transformers import SentenceTransformer
 
-# ✅ Configure Groq (kept as you asked)
-groq_client = Groq(api_key="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")
+# ✅ Hardcoded API Keys
+GROQ_API_KEY = "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"
+PINECONE_API_KEY = "pcsk_6mEt73_2ZH5JtrLugHGaBnASc3aLXFARLNayqijEJHHVhvVJenATzd2d1Wn7oGj5ShCmzn"
+SERPER_API_KEY = "0da379d2affd1fc587d4a472d84265c5f438a83f"
 GROQ_MODEL = "llama-3.3-70b-versatile"
 
-# ✅ Embedding model
+# ✅ Configure Groq
+groq_client = Groq(api_key=GROQ_API_KEY)
+
+# ✅ SentenceTransformer for embeddings
+# NOTE: On first boot, this downloads ~90MB model from HuggingFace
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
-# ✅ Pinecone (kept key)
-pc = Pinecone(api_key="pcsk_6mEt73_2ZH5JtrLugHGaBnASc3aLXFARLNayqijEJHHVhvVJenATzd2d1Wn7oGj5ShCmzn")
-
+# ✅ Pinecone
+pc = Pinecone(api_key=PINECONE_API_KEY)
 index_name = "genai-intel-chat"
-
-# ✅ Ensure index exists (VERY IMPORTANT)
-if index_name not in pc.list_indexes().names():
-    pc.create_index(
-        name=index_name,
-        dimension=384,  # all-MiniLM-L6-v2 → 384
-        metric="cosine"
-    )
-
 index = pc.Index(index_name)
 
-SERPER_API_KEY = "0da379d2affd1fc587d4a472d84265c5f438a83f"
+app = FastAPI(title="AI Intel Agent", version="1.0.0")
 
-app = FastAPI()
-
-# ⚠️ In-memory (will reset on restart)
+# In-memory user history (resets on restart — use a DB for persistence)
 user_histories = {}
-
-# ---------- Schema ----------
-class HistoryEntry(BaseModel):
-    user_id: str
-    query: str
-    response: str
-
-@app.post("/save_history")
-async def save_history(entry: HistoryEntry):
-    history = user_histories.get(entry.user_id, [])
-    history.append({
-        "query": entry.query,
-        "response": entry.response
-    })
-    user_histories[entry.user_id] = history
-    return {"status": "saved"}
-
-@app.get("/get_history/{user_id}")
-async def get_history(user_id: str):
-    return user_histories.get(user_id, [])
 
 # ---------- CORS ----------
 app.add_middleware(
@@ -65,20 +39,39 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ---------- Schema ----------
 class ChatRequest(BaseModel):
     user_id: str
     message: str
 
+class HistoryEntry(BaseModel):
+    user_id: str
+    query: str
+    response: str
+
+# ---------- History Endpoints ----------
+@app.post("/save_history")
+async def save_history(entry: HistoryEntry):
+    history = user_histories.get(entry.user_id, [])
+    history.append({"query": entry.query, "response": entry.response})
+    user_histories[entry.user_id] = history
+    return {"status": "saved"}
+
+@app.get("/get_history/{user_id}")
+async def get_history(user_id: str):
+    return user_histories.get(user_id, [])
+
 # ---------- Embedding ----------
-def get_embedding(text):
+def get_embedding(text: str):
     try:
-        return embedding_model.encode(text).tolist()
+        vector = embedding_model.encode(text).tolist()
+        return vector
     except Exception as e:
         print(f"[ERROR] Embedding failed: {e}")
         return None
 
 # ---------- Memory ----------
-def store_memory(user_id, topic, full_message, category="general"):
+def store_memory(user_id: str, topic: str, full_message: str, category: str = "general"):
     vector = get_embedding(full_message)
     if vector:
         try:
@@ -95,7 +88,7 @@ def store_memory(user_id, topic, full_message, category="general"):
         except Exception as e:
             print(f"[ERROR] Memory store failed: {e}")
 
-def retrieve_memory(user_id, query, top_k=3):
+def retrieve_memory(user_id: str, query: str, top_k: int = 3):
     vector = get_embedding(query)
     if vector:
         try:
@@ -111,31 +104,28 @@ def retrieve_memory(user_id, query, top_k=3):
     return []
 
 # ---------- News ----------
-def fetch_news(company):
+def fetch_news(query: str):
     headers = {"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"}
     try:
         res = requests.post(
             "https://google.serper.dev/news",
             headers=headers,
-            json={"q": company}
+            json={"q": query},
+            timeout=10
         )
         return res.json().get("news", [])
     except Exception as e:
         print(f"[ERROR] News fetch failed: {e}")
         return []
 
-def summarize_news(news_items):
+def summarize_news(news_items: list):
     if not news_items:
         return "No news found."
-
-    headlines = "\n".join([
-        f"{n['title']}: {n['link']}" for n in news_items[:5]
-    ])
-
+    headlines = "\n".join([f"{n['title']}: {n['link']}" for n in news_items[:5]])
     try:
         response = groq_client.chat.completions.create(
             model=GROQ_MODEL,
-            messages=[{"role": "user", "content": f"Summarize:\n{headlines}"}],
+            messages=[{"role": "user", "content": f"Summarize these news headlines concisely:\n{headlines}"}],
             max_tokens=512
         )
         return response.choices[0].message.content
@@ -150,41 +140,41 @@ async def chat(req: ChatRequest):
     msg = req.message
 
     try:
-        # 🧠 News trigger
         if "news" in msg.lower():
             news = fetch_news(msg)
             summary = summarize_news(news)
             store_memory(uid, "news", summary, "source")
             return {"response": summary}
 
-        # 🧠 Memory retrieval
         memory = retrieve_memory(uid, msg)
-
-        prompt = f"""
-Context:
-{chr(10).join(memory)}
-
-User Query:
-{msg}
-"""
+        context = "\n".join(memory)
+        prompt = f"Context from memory:\n{context}\n\nUser Query:\n{msg}" if context else msg
 
         response = groq_client.chat.completions.create(
             model=GROQ_MODEL,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=1024
         )
-
         reply = response.choices[0].message.content
-
         store_memory(uid, "chat", reply, "faq")
 
         return {"response": reply}
 
     except Exception as e:
         print(f"[ERROR] Chat failed: {e}")
-        return {"response": str(e)}  # better debugging
+        return {"response": "Something went wrong. Please try again."}
 
-# ---------- Root ----------
+# ---------- Health ----------
 @app.get("/")
 def home():
-    return {"message": "AI Intel Agent Running 🚀"}
+    return {"message": "AI Intel Agent Running 🚀", "status": "healthy"}
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+# ---------- Main ----------
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
